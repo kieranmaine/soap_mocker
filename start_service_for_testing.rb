@@ -1,7 +1,8 @@
 require "sinatra"
 require "thin"
-require_relative "mock_service_container"
+require_relative "lib/soap_mocker/mock_service_container"
 
+include SoapMocker
 
 service = MockServiceContainer.new "http://www.webservicex.net/uklocation.asmx?WSDL", "UKLocation", "UKLocationSoap", "/mock/UkLocation.svc"
 
