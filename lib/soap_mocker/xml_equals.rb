@@ -17,13 +17,10 @@ module Mocha
       # @private
       def matches?(available_parameters)
         parameter = available_parameters.shift
-        @value.remove_namespaces!
-        parameter.remove_namespaces!
+        #@value.remove_namespaces!
+        #parameter.remove_namespaces!
 
-        puts "Expected: #{@value.to_s}"
-        puts "Actual: #{parameter.to_s}"
-
-        EquivalentXml.equivalent? @value, parameter, opts = {:element_order => false}
+        EquivalentXml.equivalent? @value, parameter, opts = {:element_order => false, :normalize_whitespace => true }
       end
 
       # @private

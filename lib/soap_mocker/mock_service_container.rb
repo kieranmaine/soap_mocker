@@ -1,4 +1,3 @@
-require 'rubygems'
 require 'sinatra/base'
 require 'savon'
 require 'nokogiri'
@@ -14,13 +13,8 @@ module SoapMocker
 
   class MockServiceContainer
 
-    attr_reader :service_path, :webservice_url, :service_name, :port_name, :opts
+    attr_reader :service_path, :webservice_url, :service_name, :port_name, :opts, :io_mock
 
-    def MockServiceContainer::convert_hash_to_envelope(hash, operation_name, operations)
-      op = operations.find { |x| x[:name] == operation_name }[:operation]
-      op.body = hash
-      Nokogiri.XML op.build.to_s
-    end
 
     def initialize(wsdl_url, service_name, port_name, service_path, opts = {})
       @operations = []
@@ -43,18 +37,22 @@ module SoapMocker
     end
 
     def mock_operation(op_name, with, returns, not_equals = false)
-      if not_equals
-        @io_mock.stubs(:call_op).with(op_name, Not(xml_equals(MockServiceContainer::convert_hash_to_envelope(with, op_name, @operations)))).returns(returns)
-      else
-        @io_mock.stubs(:call_op).with(op_name, xml_equals(MockServiceContainer::convert_hash_to_envelope(with, op_name, @operations))).returns(returns)
-      end
+      matcher = not_equals ? lambda { |x| Not(xml_equals(x)) } : lambda { |x| xml_equals(x) }
+
+      @io_mock.stubs(:call_op).with(op_name, matcher.call(convert_hash_to_envelope(with, op_name).to_s)).returns(returns)
     end
 
     def run
       puts "Running on port: #{@opts[:port]}"
-      MockServiceApp.new(@operations, @service_path, @io_mock) do |web|
-        Rack::Handler::Thin.run(web, {:Port => @opts[:port]})
+      MockServiceApp.new(@operations, @service_path, @io_mock) do |app|
+        Rack::Handler::default.run(app, {:Port => @opts[:port]})
       end
+    end
+
+    def convert_hash_to_envelope(hash, operation_name)
+      op = @operations.find { |x| x[:name] == operation_name }[:operation]
+      op.body = hash
+      Nokogiri.XML op.build.to_s
     end
   end
 end

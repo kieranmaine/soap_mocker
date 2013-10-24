@@ -1,4 +1,3 @@
-require 'rubygems'
 require 'sinatra/base'
 require 'savon'
 require 'nokogiri'
@@ -43,11 +42,17 @@ module SoapMocker
       body_html = "<p>Operations count: #{@operations.size}</p>"
 
       @operations.each do |op|
-        body_html << %{<p>
-        <strong>Name:</strong> #{op[:name]}<br />
-        <strong>SOAPAction:</strong> #{op[:operation].soap_action}<br />
-        <strong>Example request body:</strong> #{op[:operation].example_body}<br />
-        <strong>Example response body:</strong> #{op[:operation].example_response_body}</p>}
+        operation = op[:operation]
+        operation.body = operation.example_body
+        body_html << %{
+        <p>
+          <strong>Name:</strong> #{op[:name]}<br />
+          <strong>SOAPAction:</strong> #{operation.soap_action}<br />
+          <strong>Example request body:</strong> #{operation.example_body}<br />
+          <strong>Example request envelope:</strong> #{operation.build.gsub("<", "&lt;").gsub(">", "&gt;")}<br />
+          <strong>Example response body:</strong> #{operation.example_response_body}<br />
+          <strong>Expectation:</strong> #{@io_mock}
+        </p>}
       end
 
       body body_html
@@ -71,11 +76,13 @@ module SoapMocker
 
       op = @soap_op[:operation]
 
-      op.response_body = @io_mock.call_op(@soap_op[:name], MockServiceApp::get_xml_from_request_body(request_body))
+      op.response_body = @io_mock.call_op(@soap_op[:name], MockServiceApp::get_xml_from_request_body(request_body).to_s)
 
       headers "Content-Type" => "text/xml; charset=utf-8"
       body op.build_response
     end
+
+
 
   end
 end
