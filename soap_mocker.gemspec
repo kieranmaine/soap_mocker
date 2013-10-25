@@ -24,8 +24,8 @@ Gem::Specification.new do |spec|
   spec.add_dependency "equivalent-xml"
   spec.add_dependency "mocha"
   spec.add_dependency "activesupport"
+  spec.add_dependency "rspec", "~> 2.14"
 
   spec.add_development_dependency "bundler", "~> 1.3"
   spec.add_development_dependency "rake"
-  spec.add_development_dependency "rspec", "~> 2.14"
 end

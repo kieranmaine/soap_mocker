@@ -34,13 +34,11 @@ service.io_mock.stubs(:call_op)
   .with("GetUKLocationByPostCode", regexp_matches(/AL1 4JW/))
   .returns({:GetUKLocationByPostCodeResponse => {:GetUKLocationByPostCodeResult => "TESTING"}})
 
-thread = service.run_in_thread
+service.run
 
 # Set up mock data after service is running.
 service.mock_operation "GetUKLocationByPostCode",
                        {:GetUKLocationByPostCode => {:PostCode => "N1C 4QP"}},
                        {:GetUKLocationByPostCodeResponse => {:GetUKLocationByPostCodeResult => "St Pancras International Station, Euston Road, London, N1C 4QP"}}
 
-
-thread.join
 ```

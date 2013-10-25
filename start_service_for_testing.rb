@@ -21,9 +21,9 @@ service.io_mock.stubs(:call_op)
   .with("GetUKLocationByPostCode", regexp_matches(/AL1 4JW/))
   .returns({:GetUKLocationByPostCodeResponse => {:GetUKLocationByPostCodeResult => "TESTING"}})
 
-Thread.abort_on_exception = true
+#Thread.abort_on_exception = true
 
-Thread.new { service.run }
+service.run
 
 # Mock expectations after service has started running
 service.mock_operation "GetUKLocationByPostCode",
