@@ -10,13 +10,37 @@ Usage
 
 ````ruby
 require 'SOAPMocker'
+require 'mocha/api'
 
-mock_service = SOAPMocker.new "http://www.webservicex.net/uklocation.asmx?WSDL", { :port => 3001, :path => "mock/FakeService.svc" }
+include Mocha::API
 
-web.mock_operation "GetUKLocationByPostCode",
-                    {:GetUKLocationByPostCode => {:PostCode => "AL1 4JW"}},
-                    {:GetUKLocationByPostCodeResponse => {:GetUKLocationByPostCodeResult => "St Pauls Place, St Albans, Hertfordshire, AL1 4JW"}}
+service = SoapMocker::MockServiceContainer.new "http://www.webservicex.net/uklocation.asmx?WSDL", "UKLocation", "UKLocationSoap", "/mock/UkLocationSoapService", {:port => 1066}
 
-# Web service will be accessible at the URL http://localhost:3001/mock/FakeService.svc
-mock_service.run
+# Set up responses for invalid requests
+["SW1A 0AA", "N1C 4QP"].each do |postcode|
+  service.mock_operation "GetUKLocationByPostCode",
+                         {:GetUKLocationByPostCode => {:PostCode => postcode}},
+                         {:GetUKLocationByPostCodeResponse => {:GetUKLocationByPostCodeResult => "THIS IS AN INVALID POSTCODE"}},
+                         true
+end
+
+# Set up responses for valid requests
+service.mock_operation "GetUKLocationByPostCode",
+                       {:GetUKLocationByPostCode => {:PostCode => "SW1A 0AA"}},
+                       {:GetUKLocationByPostCodeResponse => {:GetUKLocationByPostCodeResult => "House Of Commons, London, SW1A 0AA, United Kingdom"}}
+
+# Example of accessing mock object directly.
+service.io_mock.stubs(:call_op)
+  .with("GetUKLocationByPostCode", regexp_matches(/AL1 4JW/))
+  .returns({:GetUKLocationByPostCodeResponse => {:GetUKLocationByPostCodeResult => "TESTING"}})
+
+thread = service.run_in_thread
+
+# Set up mock data after service is running.
+service.mock_operation "GetUKLocationByPostCode",
+                       {:GetUKLocationByPostCode => {:PostCode => "N1C 4QP"}},
+                       {:GetUKLocationByPostCodeResponse => {:GetUKLocationByPostCodeResult => "St Pancras International Station, Euston Road, London, N1C 4QP"}}
+
+
+thread.join
 ```

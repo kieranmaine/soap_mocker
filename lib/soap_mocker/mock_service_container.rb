@@ -7,14 +7,13 @@ require 'active_support/core_ext/hash/conversions'
 require 'thin'
 require_relative 'xml_equals'
 require_relative 'mock_service_app'
+require_relative 'logging'
 
 module SoapMocker
-  include Mocha::API
-
   class MockServiceContainer
+    include Mocha::API
 
     attr_reader :service_path, :webservice_url, :service_name, :port_name, :opts, :io_mock
-
 
     def initialize(wsdl_url, service_name, port_name, service_path, opts = {})
       @operations = []
@@ -23,7 +22,7 @@ module SoapMocker
       @service_name = service_name
       @port_name = port_name
       @service_path = service_path
-      @opts = {:port => 3000}.merge(opts)
+      @opts = {:port => 4567}.merge(opts)
 
       client = Savon.new @webservice_url
 
@@ -43,10 +42,11 @@ module SoapMocker
     end
 
     def run
-      puts "Running on port: #{@opts[:port]}"
-      MockServiceApp.new(@operations, @service_path, @io_mock) do |app|
-        Rack::Handler::default.run(app, {:Port => @opts[:port]})
-      end
+      SoapMocker::Logging.logger.info "Your soapy mock is running on port #{@opts[:port]}"
+
+      app = MockSoapServiceApp.new(@operations, @service_path, @io_mock)
+
+      Rack::Handler::default.run(app, {:Port => @opts[:port]})
     end
 
     def convert_hash_to_envelope(hash, operation_name)
