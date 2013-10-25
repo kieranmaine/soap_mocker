@@ -9,7 +9,7 @@ Usage
 =====
 
 ````ruby
-require 'SOAPMocker'
+require 'soap_mocker'
 require 'mocha/api'
 
 include Mocha::API
