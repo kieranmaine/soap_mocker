@@ -7,6 +7,9 @@ require "soap_mocker"
 require "rspec"
 require "rack/test"
 require "logging"
+require "mocha/api"
+
+include Mocha::API
 
 describe SoapMocker::MockSoapServiceApp do
 
@@ -21,7 +24,7 @@ describe SoapMocker::MockSoapServiceApp do
       {:name => operation_name, :soap_action => op.soap_action, :operation => op, :mocking => []}
     }
 
-    @app = SoapMocker::MockSoapServiceApp.new operations, "/mock/UkLocationSoapService", {}
+    @app = SoapMocker::MockSoapServiceApp.new operations, "/mock/UkLocationSoapService", Mocha::API::mock()
 
     @browser = Rack::Test::Session.new(Rack::MockSession.new(@app))
   end
@@ -132,6 +135,10 @@ describe SoapMocker::MockSoapServiceApp do
       expect(@browser.last_response.body).to eq("Mock successfully set up")
     end
 
+    it "should increment the mocks_per_operation count" do
+      expect(@app.helpers.mocks_per_operation["GetUKLocationByPostCode"]).to eq 1
+    end
+
     describe "When the mocked operation is called with a specified parameter" do
       it "should return the specified value" do
         request_body = %Q{
@@ -159,7 +166,7 @@ describe SoapMocker::MockSoapServiceApp do
     end
 
     describe "When the mocked operation is called with an unspecified parameter" do
-      it "should throw a Mock::ExpectationError" do
+      it "should throw a Mocha::ExpectationError" do
         request_body = %Q{
           <env:Envelope xmlns:lol0="http://www.webserviceX.NET" xmlns:env="http://schemas.xmlsoap.org/soap/envelope/">
             <env:Header></env:Header>

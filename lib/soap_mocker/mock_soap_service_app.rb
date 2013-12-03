@@ -17,6 +17,7 @@ module SoapMocker
     include Mocha::API
 
     attr_reader :service_path
+    attr_reader :mocks_per_operation
     attr_accessor :io_mock
 
     def app
@@ -34,17 +35,11 @@ module SoapMocker
     end
 
     def increment_mock_operation_count(op_name, returns, with)
-      stub_implemented = false
       begin
-        result = @io_mock.call_op(op_name, MockServiceContainer.convert_hash_to_envelope(with, op_name, @operations).to_s)
-        if (result == returns)
-          stub_implemented = true
-        end
-      rescue
-
+        @io_mock.call_op(op_name, MockServiceContainer.convert_hash_to_envelope(with, op_name, @operations).to_s)
+      rescue Mocha::ExpectationError
+        @mocks_per_operation[op_name] = (@mocks_per_operation[op_name] || 0) + 1
       end
-
-      @mocks_per_operation[op_name] = (@mocks_per_operation[op_name] || 0) + 1 unless stub_implemented
     end
 
     def initialize(operations, service_path, io_mock)
@@ -113,10 +108,8 @@ module SoapMocker
       increment_mock_operation_count(op_name, returns, with)
 
       matcher = not_equals ? lambda { |x| Not(xml_equals(x)) } : lambda { |x| xml_equals(x) }
-      #
-      @io_mock.stubs(:call_op).with(op_name, matcher.call(MockServiceContainer.convert_hash_to_envelope(with, op_name, @operations).to_s)).returns(returns)
 
-      #MockServiceContainer.mock_operation(@io_mock, @operations, op_name, with, returns, not_equals)
+      @io_mock.stubs(:call_op).with(op_name, matcher.call(MockServiceContainer.convert_hash_to_envelope(with, op_name, @operations).to_s)).returns(returns)
 
       "Mock successfully set up"
     end
