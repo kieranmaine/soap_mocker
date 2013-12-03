@@ -6,7 +6,7 @@ require 'mocha/api'
 require 'active_support/core_ext/hash/conversions'
 require 'thin'
 require_relative 'xml_equals'
-require_relative 'mock_service_app'
+require_relative 'mock_soap_service_app'
 require_relative 'logging'
 
 module SoapMocker
@@ -36,9 +36,13 @@ module SoapMocker
     end
 
     def mock_operation(op_name, with, returns, not_equals = false)
+      MockServiceContainer.mock_operation(@io_mock, @operations, op_name, with, returns, not_equals)
+    end
+
+    def self.mock_operation(io_mock, operations, op_name, with, returns, not_equals = false)
       matcher = not_equals ? lambda { |x| Not(xml_equals(x)) } : lambda { |x| xml_equals(x) }
 
-      @io_mock.stubs(:call_op).with(op_name, matcher.call(convert_hash_to_envelope(with, op_name).to_s)).returns(returns)
+      io_mock.stubs(:call_op).with(op_name, matcher.call(MockServiceContainer.convert_hash_to_envelope(with, op_name, operations).to_s)).returns(returns)
     end
 
     def run
@@ -49,10 +53,13 @@ module SoapMocker
       Rack::Handler::default.run(app, {:Port => @opts[:port]})
     end
 
-    def convert_hash_to_envelope(hash, operation_name)
-      op = @operations.find { |x| x[:name] == operation_name }[:operation]
-      op.body = hash
-      Nokogiri.XML op.build.to_s
+    def self.convert_hash_to_envelope(hash, operation_name, operations)
+      self.convert_hash_to_envelope_for_operation hash, operations.find { |x| x[:name] == operation_name }[:operation]
+    end
+
+    def self.convert_hash_to_envelope_for_operation(hash, operation)
+      operation.body = hash
+      Nokogiri.XML operation.build.to_s
     end
   end
 end
