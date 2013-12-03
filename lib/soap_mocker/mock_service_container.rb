@@ -36,13 +36,9 @@ module SoapMocker
     end
 
     def mock_operation(op_name, with, returns, not_equals = false)
-      MockServiceContainer.mock_operation(@io_mock, @operations, op_name, with, returns, not_equals)
-    end
-
-    def self.mock_operation(io_mock, operations, op_name, with, returns, not_equals = false)
       matcher = not_equals ? lambda { |x| Not(xml_equals(x)) } : lambda { |x| xml_equals(x) }
 
-      io_mock.stubs(:call_op).with(op_name, matcher.call(MockServiceContainer.convert_hash_to_envelope(with, op_name, operations).to_s)).returns(returns)
+      @io_mock.stubs(:call_op).with(op_name, matcher.call(MockServiceContainer.convert_hash_to_envelope(with, op_name, @operations).to_s)).returns(returns)
     end
 
     def run
