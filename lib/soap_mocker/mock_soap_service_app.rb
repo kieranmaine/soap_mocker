@@ -6,9 +6,8 @@ require 'mocha/api'
 require 'active_support/core_ext/hash/conversions'
 require 'thin'
 require 'json'
-require_relative 'xml_equals'
-require_relative 'logging'
-require_relative 'mock_service_container'
+require 'soap_mocker/xml_equals'
+require 'soap_mocker/logging'
 
 module SoapMocker
 
@@ -36,21 +35,36 @@ module SoapMocker
 
     def increment_mock_operation_count(op_name, returns, with)
       begin
-        @io_mock.call_op(op_name, MockServiceContainer.convert_hash_to_envelope(with, op_name, @operations).to_s)
+        @io_mock.call_op(op_name, MockSoapServiceApp.convert_hash_to_envelope(with, op_name, @operations).to_s)
       rescue Mocha::ExpectationError
         @mocks_per_operation[op_name] = (@mocks_per_operation[op_name] || 0) + 1
       end
     end
 
-    def initialize(operations, service_path, io_mock)
-      @operations = operations
-      @service_path = service_path.downcase
+    def self.create_soap_operations_collection(wsdl_file_or_url, service_name, port_name)
+      client = Savon.new wsdl_file_or_url
+
+      client.operations(service_name, port_name).map { |operation_name|
+        op = client.operation(service_name, port_name, operation_name)
+        {:name => operation_name, :soap_action => op.soap_action, :operation => op, :mocking => []}
+      }
+    end
+
+    def self.convert_hash_to_envelope(hash, operation_name, operations)
+      operation = operations.find { |x| x[:name] == operation_name }[:operation]
+      operation.body = hash
+      Nokogiri.XML operation.build.to_s
+    end
+
+    def initialize(operations = nil, service_path = nil, io_mock = mock())
+      super()
+
+      @operations = (operations || SoapMocker::MockSoapServiceApp.create_soap_operations_collection(settings.wsdl_file_or_url, settings.service_name, settings.port_name))
+      @service_path = (service_path || settings.service_path).downcase
       @io_mock = io_mock
       @mocks_per_operation = {}
 
       SoapMocker::Logging.logger.info "Service path: #{@service_path}"
-
-      super()
     end
 
     before do
@@ -92,6 +106,10 @@ module SoapMocker
       body "<html><body>#{body_html}</body></html>"
     end
 
+    def self.mock_operation_call(i, o, not_equals, op_name, returns, with)
+
+    end
+
     post "/operation/:operation_name/mock" do |op_name|
       unless @operations.any?{|x| x[:name] == op_name}
         halt 500, "Operation is not valid. Go to <a href=\"/operations\">/operations</a> for list of valid operations and SOAP actions."
@@ -109,7 +127,9 @@ module SoapMocker
 
       matcher = not_equals ? lambda { |x| Not(xml_equals(x)) } : lambda { |x| xml_equals(x) }
 
-      @io_mock.stubs(:call_op).with(op_name, matcher.call(MockServiceContainer.convert_hash_to_envelope(with, op_name, @operations).to_s)).returns(returns)
+      @io_mock.stubs(:call_op)
+        .with(op_name, matcher.call(MockSoapServiceApp.convert_hash_to_envelope(with, op_name, @operations).to_s))
+        .returns(returns)
 
       "Mock successfully set up"
     end

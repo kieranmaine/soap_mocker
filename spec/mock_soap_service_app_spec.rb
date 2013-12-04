@@ -10,21 +10,24 @@ require "logging"
 require "mocha/api"
 
 include Mocha::API
+include SoapMocker
 
 describe SoapMocker::MockSoapServiceApp do
+
+  include Rack::Test::Methods
 
   before (:each) do
     SoapMocker::Logging.logger.level = Logger::FATAL
 
     @service_name, @port_name = "UKLocation", "UKLocationSoap"
-    client = Savon.new File.read(File.join(File.dirname(__FILE__), "/wsdl/uklocation.wsdl"))
+    wsdl_file = File.read(File.join(File.dirname(__FILE__), "/wsdl/uklocation.wsdl"))
 
-    operations = client.operations(@service_name, @port_name).map { |operation_name|
-      op = client.operation(@service_name, @port_name, operation_name)
-      {:name => operation_name, :soap_action => op.soap_action, :operation => op, :mocking => []}
-    }
+    SoapMocker::MockSoapServiceApp.set :service_path, "/mock/UkLocationSoapService"
+    SoapMocker::MockSoapServiceApp.set :wsdl_file_or_url, wsdl_file
+    SoapMocker::MockSoapServiceApp.set :service_name, @service_name
+    SoapMocker::MockSoapServiceApp.set :port_name, @port_name
 
-    @app = SoapMocker::MockSoapServiceApp.new operations, "/mock/UkLocationSoapService", Mocha::API::mock()
+    @app = SoapMocker::MockSoapServiceApp.new
 
     @browser = Rack::Test::Session.new(Rack::MockSession.new(@app))
   end
