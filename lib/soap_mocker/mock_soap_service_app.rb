@@ -16,7 +16,6 @@ module SoapMocker
     include Mocha::API
 
     attr_reader :service_path
-    attr_reader :mocks_per_operation
     attr_accessor :io_mock
 
     def app
@@ -33,76 +32,69 @@ module SoapMocker
       xml
     end
 
-    def increment_mock_operation_count(op_name, returns, with)
+    def increment_mock_operation_count(soap_service, operation, with)
       begin
-        @io_mock.call_op(op_name, MockSoapServiceApp.convert_hash_to_envelope(with, op_name, @operations).to_s)
+        soap_service.io_mock.call_op(operation[:name], MockSoapServiceApp.convert_hash_to_envelope(with, operation).to_s)
       rescue Mocha::ExpectationError
-        @mocks_per_operation[op_name] = (@mocks_per_operation[op_name] || 0) + 1
+        operation[:mock_count] = (operation[:mock_count] || 0) + 1
       end
     end
 
-    def self.create_soap_operations_collection(wsdl_file_or_url, service_name, port_name)
-      client = Savon.new wsdl_file_or_url
-
-      client.operations(service_name, port_name).map { |operation_name|
-        op = client.operation(service_name, port_name, operation_name)
-        {:name => operation_name, :soap_action => op.soap_action, :operation => op, :mocking => []}
-      }
+    def self.convert_hash_to_envelope(hash, operation)
+      operation[:operation].body = hash
+      Nokogiri.XML operation[:operation].build.to_s
     end
 
-    def self.convert_hash_to_envelope(hash, operation_name, operations)
-      operation = operations.find { |x| x[:name] == operation_name }[:operation]
-      operation.body = hash
-      Nokogiri.XML operation.build.to_s
-    end
-
-    def initialize(operations = nil, service_path = nil, io_mock = mock())
-      super()
-
-      @operations = (operations || SoapMocker::MockSoapServiceApp.create_soap_operations_collection(settings.wsdl_file_or_url, settings.service_name, settings.port_name))
-      @service_path = (service_path || settings.service_path).downcase
-      @io_mock = io_mock
-      @mocks_per_operation = {}
-
-      SoapMocker::Logging.logger.info "Service path: #{@service_path}"
+    def self.valid_operations_request?(request_path)
+      settings.soap_services.any?{|s| request_path == "#{s.service_path}/operations".downcase }
     end
 
     before do
       SoapMocker::Logging.logger.info(request.path)
-      unless ["/", "/operations"].include?(request.path.downcase) or request.path =~ /operation\/(.)*\/mock/
-        message_404 = "Nothing exists here. POST SOAP Actions to \"/mock/UkLocationSoapService\".  Go to <a href=\"/operations\">/operations</a> for list of valid operations and SOAP actions."
-        halt 404, message_404 unless request.path.downcase == @service_path
+
+      unless request.path.downcase == "/" or MockSoapServiceApp.valid_operations_request?(request.path.downcase) or request.path =~ /\/(.)*\/operation\/(.)*\/mock/
+        message_404 = "Nothing exists here. Go to <a href=\"/\">/</a> to view a list of services. Go to <a href=\"/{service_path}/operations\">/{service_path}/operations</a> for list of valid operations and SOAP actions for a specific service."
+        halt 404, message_404 unless settings.soap_services.any?{|s| s.service_path.downcase == request.path.downcase}
 
         soap_action = request.env["HTTP_SOAPACTION"]
         halt 500, "SOAPAction header not present." if soap_action.nil?
 
         soap_action = soap_action.gsub "\"", ""
-        @soap_op = @operations.find { |x| x[:soap_action] == soap_action }
+        soap_service = settings.soap_services.find{ |s| s.service_path.downcase == request.path.downcase }
+        @io_mock = soap_service.io_mock
+        @soap_op = soap_service.operations.find { |x| x[:soap_action] == soap_action }
         halt 500, "SOAPAction header not valid. Go to <a href=\"/operations\">/operations</a> for list of valid operations and SOAP actions." if @soap_op.nil?
       end
     end
 
     get "/" do
-      "This is a SOAP mock service. Good luck."
+      "<p>This is a SOAP mock service. The following SOAP services have been mocked:</p>" +
+          "<p><ul>#{settings.soap_services.map { |s| "<li>#{s.service_name} - Path: #{s.service_path}</li>" }.sort.join}</ul></p>"
     end
 
-    get "/operations" do
-      body_html = "<div id=\"operationsCount\">Operations count: #{@operations.size}</div>"
+    get "*/operations" do |service_path|
+      operations = settings.soap_services.find{|s| s.service_path.downcase == service_path.downcase}.operations
 
-      @operations.each do |op|
+      body_html = "<div id=\"operationsCount\">Operations count: #{operations.size}</div>"
+      body_html << "<ul class=\"operations\">"
+
+      operations.each do |op|
         operation = op[:operation]
         operation.body = operation.example_body
         body_html << %{
-        <div class=\"operation\">
-          <strong>Name:</strong> #{op[:name]}<br />
-          <strong># Mocked Ops:</strong> #{@mocks_per_operation[op[:name]] || 0}<br />
-          <strong>SOAPAction:</strong> #{operation.soap_action}<br />
-          <strong>Example request body:</strong> #{operation.example_body}<br />
-          <strong>Example request envelope:</strong> #{operation.build.gsub("<", "&lt;").gsub(">", "&gt;")}<br />
-          <strong>Example response body:</strong> #{operation.example_response_body}<br />
-        </div>}
+        <li class=\"operation\">
+          <ul>
+            <li><strong>Name:</strong> #{op[:name]}</li>
+            <li><strong># Mocked Ops:</strong> #{op[:mock_count]}</li>
+            <li><strong>SOAPAction:</strong> #{operation.soap_action}</li>
+            <li><strong>Example request body:</strong> #{operation.example_body}</li>
+            <li><strong>Example request envelope:</strong> #{operation.build.gsub("<", "&lt;").gsub(">", "&gt;")}</li>
+            <li><strong>Example response body:</strong> #{operation.example_response_body}</li>
+          </ul>
+        </li>}
       end
 
+      body_html << "</ul>"
       body "<html><body>#{body_html}</body></html>"
     end
 
@@ -110,9 +102,14 @@ module SoapMocker
 
     end
 
-    post "/operation/:operation_name/mock" do |op_name|
-      unless @operations.any?{|x| x[:name] == op_name}
-        halt 500, "Operation is not valid. Go to <a href=\"/operations\">/operations</a> for list of valid operations and SOAP actions."
+    post "*/operation/*/mock" do |service_path, op_name|
+      soap_service = settings.soap_services.find { |s| s.service_path == service_path }
+      operations = soap_service.operations
+
+      operation = operations.find{|o|o[:name] == op_name}
+
+      if operation.nil?
+        halt 500, "Operation is not valid. Go to <a href=\"#{soap_service.service_path}/operations\">#{soap_service.service_path}/operations</a> for list of valid operations and SOAP actions."
       end
 
       json = JSON.parse request.body.read
@@ -123,13 +120,11 @@ module SoapMocker
       returns = eval(json["returns"])
       not_equals = json["not_equals"]
 
-      increment_mock_operation_count(op_name, returns, with)
+      increment_mock_operation_count(soap_service, operation, with)
 
       matcher = not_equals ? lambda { |x| Not(xml_equals(x)) } : lambda { |x| xml_equals(x) }
 
-      @io_mock.stubs(:call_op)
-        .with(op_name, matcher.call(MockSoapServiceApp.convert_hash_to_envelope(with, op_name, @operations).to_s))
-        .returns(returns)
+      soap_service.io_mock.stubs(:call_op).with(op_name, matcher.call(MockSoapServiceApp.convert_hash_to_envelope(with, operation).to_s)).returns(returns)
 
       "Mock successfully set up"
     end
