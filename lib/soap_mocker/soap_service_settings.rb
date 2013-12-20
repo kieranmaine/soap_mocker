@@ -12,7 +12,7 @@ module SoapMocker
       @service_name = service_name
       @port_name = port_name
       @mocks_per_operation = {}
-      @io_mock = mock()
+      @io_mock = Mocha::API::mock()
     end
 
     def create_soap_operations_collection
