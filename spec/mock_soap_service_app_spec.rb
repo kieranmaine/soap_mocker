@@ -10,7 +10,6 @@ require "rack/test"
 require "logging"
 require "mocha/api"
 
-include Mocha::API
 include SoapMocker
 
 describe SoapMocker::MockSoapServiceApp do

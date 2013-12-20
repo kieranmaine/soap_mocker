@@ -3,6 +3,8 @@ require 'mocha/api'
 
 module SoapMocker
   class SoapServiceSettings
+    include Mocha::API
+
     attr_accessor :mocks_per_operation
     attr_reader :service_path, :wsdl_file_or_url, :service_name, :port_name, :io_mock
 
@@ -12,7 +14,7 @@ module SoapMocker
       @service_name = service_name
       @port_name = port_name
       @mocks_per_operation = {}
-      @io_mock = Mocha::API::mock()
+      @io_mock = mock()
     end
 
     def create_soap_operations_collection
