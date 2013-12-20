@@ -1,3 +1,6 @@
+require 'savon'
+require 'mocha/api'
+
 module SoapMocker
   class SoapServiceSettings
     attr_accessor :mocks_per_operation
